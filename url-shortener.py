@@ -1,6 +1,7 @@
 import base64
 import re
 import sys
+import time
 
 from flask import Flask, abort, redirect, request
 
@@ -21,6 +22,19 @@ URL_CORRECTNESS_REGEX = (
     r"(?::\d+)?"                                                        # Then we match an optional port, consisting of at least one digit. Note that the double colon is actually part of `(?:)`, which means a matched but not saved string.
     r"(?:/?|[/?]\S+)$"                                                  # Finally, we match an optional slash or a (slash or question mark) followed by at least one non-whitespace character. This effectively makes most of the paths wildcards, as they can be anything; but because paths can container arbitrary information, this is OK. At last we match the end-of-string boundary, `$`.
 )
+app = Flask(__name__)
+
+id_map_of_url = {}
+
+# Epoch as a constant start point to calculate the millisecond on the snowflake ID (EPOCH_MS = 1420070400000, is the one that Discord use)
+# Source that discord use this Epoch https://en.wikipedia.org/wiki/Snowflake_ID, that we currently used
+# Another reference that is used https://bhagwatimalav.substack.com/p/what-is-the-snowflake-unique-id-generator-c45?utm_medium=web (All the links proof that it is being used and scalable)
+EPOCH_MS = 1420070400000
+WORKER_ID = 0  
+SEQ_BITS = 12
+WORKER_BITS = 10
+MAX_SEQ = (1 << SEQ_BITS) - 1
+ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 def is_url_valid(url):
     """
@@ -33,14 +47,40 @@ def is_url_valid(url):
     # Match with the global regex-expression from the stackoverflow
     return re.match(URL_CORRECTNESS_REGEX, url) is not None
 
-app = Flask(__name__)
+def base62_encode(n: int) -> str:
+    if n == 0:
+        return ALPHABET[0]
+    out = []
+    while n > 0:
+        n, r = divmod(n, 62)
+        out.append(ALPHABET[r])
+    return "".join(reversed(out))
 
-id_map_of_url = {}
-worker_id = 0
-seq_bits = 12
+class IdGenerator:
+    def __init__(self):
+        self.last_ms = -1
+        self.seq = 0
 
-def id_generator():
-    pass
+    def next_int(self) -> int:
+        now_ms = int(time.time() * 1000)
+
+        if now_ms == self.last_ms:
+            self.seq += 1
+            if self.seq > MAX_SEQ:
+                # Too many IDs in one ms; wait for next ms
+                while now_ms <= self.last_ms:
+                    now_ms = int(time.time() * 1000)
+                self.seq = 0
+        else:
+            self.seq = 0
+            self.last_ms = now_ms
+        t = now_ms - EPOCH_MS
+        return (t << (WORKER_BITS + SEQ_BITS)) | (WORKER_ID << SEQ_BITS) | self.seq
+
+    def next_code(self) -> str:
+        return base62_encode(self.next_int())
+
+id_generator = IdGenerator()
 
 @app.route("/", methods=['GET', 'POST', 'DELETE'])
 def root():
@@ -52,14 +92,26 @@ def root():
         url = request.form["url"]
         if not is_url_valid(url):
             return "URL is not valid"
-        pass
+        # Generate new identifier for the URL
+        url_identifier = id_generator.next_code()
+        # Insert the ID with the url in map
+        id_map_of_url[url_identifier] = url
+
+        # Return the url identifier and the status code 201 meaning success
+        return url_identifier,201
     elif request.method == "DELETE":
         pass
 
 @app.route("/<string:id>",methods = ['GET','PUT','DELETE'])
 def url_with_id(id):
     if request.method == "GET":
-        pass
+        if id in id_map_of_url:
+            # Redirect user to the related id in the map
+            # The redirect() function will automatically set the correct headers and status code
+            return redirect(id_map_of_url[id])
+        else:
+            # Url of that Id is not found
+            abort(404)
     elif request.method == "PUT":
         pass
     elif request.method == "DELETE":
