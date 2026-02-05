@@ -22,8 +22,46 @@ URL_CORRECTNESS_REGEX = (
     r"(?:/?|[/?]\S+)$"                                                  # Finally, we match an optional slash or a (slash or question mark) followed by at least one non-whitespace character. This effectively makes most of the paths wildcards, as they can be anything; but because paths can container arbitrary information, this is OK. At last we match the end-of-string boundary, `$`.
 )
 
+def is_url_valid(url):
+    """
+        Tries to match the given URL for correctness.
+
+        Do so by simply matching it to a regular expression that performs this
+        check (see the comment at URL_CORRECTNESS_REGEX).
+    """
+
+    # Match with the global regex-expression from the stackoverflow
+    return re.match(URL_CORRECTNESS_REGEX, url) is not None
+
 app = Flask(__name__)
+
+id_map_of_url = {}
+worker_id = 0
+seq_bits = 12
+
+def id_generator():
+    pass
 
 @app.route("/", methods=['GET', 'POST', 'DELETE'])
 def root():
+    if request.method == "GET":
+        return { "ids:urls": id_map_of_url }
+    elif request.method == "POST":
+        if "url" not in request.form:
+            return "URL is not present",400
+        url = request.form["url"]
+        if not is_url_valid(url):
+            return "URL is not valid"
+        pass
+    elif request.method == "DELETE":
+        pass
+
+@app.route("/<string:id>",methods = ['GET','PUT','DELETE'])
+def url_with_id(id):
+    if request.method == "GET":
+        pass
+    elif request.method == "PUT":
+        pass
+    elif request.method == "DELETE":
+        pass
     pass
