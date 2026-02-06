@@ -99,8 +99,13 @@ def root():
 
         # Return the url identifier and the status code 201 meaning success
         return url_identifier,201
+        
     elif request.method == "DELETE":
-        pass
+     if not id_map_of_url:
+        return "No URLs to delete", 404
+     else:
+        id_map_of_url.clear()
+        return "All URLs deleted", 200
 
 @app.route("/<string:id>",methods = ['GET','PUT','DELETE'])
 def url_with_id(id):
