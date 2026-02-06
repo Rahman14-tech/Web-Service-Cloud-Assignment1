@@ -112,8 +112,30 @@ def url_with_id(id):
         else:
             # Url of that Id is not found
             abort(404)
+
     elif request.method == "PUT":
-        pass
+        # For PUT ID must already exist else page not found
+        if id not in id_map_of_url:
+            abort(404)
+
+        # New URL must be provided
+        if "url" not in request.form:
+            return "URL is not present", 400
+
+        new_url = request.form["url"]
+
+        # Validating the new URL
+        if not is_url_valid(new_url):
+            return "URL is not valid", 400
+
+        # Updating the stored URL
+        id_map_of_url[id] = new_url
+        return "success", 200
+
     elif request.method == "DELETE":
-        pass
-    pass
+        if id in id_map_of_url:
+            # Deleting the mapping
+            del id_map_of_url[id]
+            return "success", 204
+        else:
+            abort(404)
