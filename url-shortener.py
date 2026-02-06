@@ -3,7 +3,7 @@ import re
 import sys
 import time
 
-from flask import Flask, abort, redirect, request
+from flask import Flask, abort, redirect, request, jsonify, make_response
 
 
 # ### CONSTANTS ###
@@ -85,27 +85,32 @@ id_generator = IdGenerator()
 @app.route("/", methods=['GET', 'POST', 'DELETE'])
 def root():
     if request.method == "GET":
-        return { "ids:urls": id_map_of_url }
+        return make_response(jsonify({"ids:urls":id_map_of_url}), 200)
     elif request.method == "POST":
-        if "url" not in request.form:
-            return "URL is not present",400
-        url = request.form["url"]
+        data = request.get_json()
+        print(f"Hidup Jokowi {data}")
+        if "value" not in data:
+            return make_response(jsonify({"msg":"URL is not present"}), 400)
+        url = data["value"]
+        print(f"YNTKTS {url}")
         if not is_url_valid(url):
-            return "URL is not valid"
+            return make_response(jsonify({"msg":"URL is not valid"}), 400)
         # Generate new identifier for the URL
         url_identifier = id_generator.next_code()
         # Insert the ID with the url in map
         id_map_of_url[url_identifier] = url
 
         # Return the url identifier and the status code 201 meaning success
-        return url_identifier,201
+        return make_response(jsonify({"id":url_identifier}), 201)
         
     elif request.method == "DELETE":
-     if not id_map_of_url:
-        return "No URLs to delete", 404
-     else:
-        id_map_of_url.clear()
-        return "All URLs deleted", 200
+        print(f"Bapak Mulyono {not id_map_of_url} Raja {id_map_of_url}")
+        if not id_map_of_url:
+            return make_response(jsonify({"msg":"Nothing to delete"}), 404)
+        else:
+            # clear all the ids in the map
+            id_map_of_url.clear()
+            return make_response(jsonify({"msg":"All URLs deleted"}), 404)
 
 @app.route("/<string:id>",methods = ['GET','PUT','DELETE'])
 def url_with_id(id):
@@ -113,34 +118,39 @@ def url_with_id(id):
         if id in id_map_of_url:
             # Redirect user to the related id in the map
             # The redirect() function will automatically set the correct headers and status code
-            return redirect(id_map_of_url[id])
+            return make_response(jsonify({"value":id_map_of_url[id]}), 301)
         else:
             # Url of that Id is not found
             abort(404)
 
     elif request.method == "PUT":
         # For PUT ID must already exist else page not found
+        print(f"Yorozuya {id} do you feel {request.get_json(force=True)}")
         if id not in id_map_of_url:
-            abort(404)
+            print(f"Shinpachi {id}")
+            return make_response(jsonify({"msg":"ID is not present/valid"}), 404)
 
+        data = request.get_json()
+        print(f"Hidup Mulyonoooo {data}")
         # New URL must be provided
-        if "url" not in request.form:
-            return "URL is not present", 400
+        if "url" not in data:
+            return make_response(jsonify({"msg":"URL is not present"}), 400)
 
-        new_url = request.form["url"]
+
+        new_url = data["url"]
 
         # Validating the new URL
         if not is_url_valid(new_url):
-            return "URL is not valid", 400
+            return make_response(jsonify({"msg":"URL is not valid"}), 400)
 
         # Updating the stored URL
         id_map_of_url[id] = new_url
-        return "success", 200
+        return make_response(jsonify({"msg":"success"}), 200)
 
     elif request.method == "DELETE":
         if id in id_map_of_url:
-            # Deleting the mapping
+            # Deleting the mapping on the Id given
             del id_map_of_url[id]
-            return "success", 204
+            return make_response(jsonify({"msg":"success"}), 204)
         else:
             abort(404)
